@@ -1,0 +1,3 @@
+_ERR_TOPOLOGY          11      Invalid topology.
+_ERR_READ_ONLY         45      Read-only file system.
+

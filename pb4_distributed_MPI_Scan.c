@@ -4,9 +4,11 @@
 
 //random numbers size
 #define DEBUG 0
+//for writing test document
 #define TEST 1
-#define randsize 10000
-#define randmax 10000
+#define P2PCommunication 0
+#define randsize 100000
+#define randmax 100000000
 
 void get_stdt(int*st,int*dt,int numprocs,int rank){
     int leftover = randsize - numprocs*(randsize/numprocs);
@@ -35,12 +37,15 @@ int main(int argc,char * argv[]){
     //input buf, output buf
     //current process's sum of st~dt ,and return sum from prev process
     int inbuf=0,outbuf=0;
+    int cur_proc_prefixSum=0;
     //start of index, end of index;
     int st,dt;
     //for loop
     int i;
     //for TEST time
     double start_time,finish_time;
+    //for mpi_recv status
+    MPI_Status status;
 
     //make rand array
     for(i=0;i<randsize;i++){
@@ -68,18 +73,42 @@ int main(int argc,char * argv[]){
     //calculating inbuf,outbuf.
     //inbuf : sum of st~dt-1
     for(i=st;i<dt;i++){
-        inbuf += arr[i];
+        cur_proc_prefixSum += arr[i];
     }
+    inbuf = cur_proc_prefixSum;
     
+    #if P2PCommunication
+    //0~7, 8
+    if( 1){
+        if(rank == 0){
+            MPI_Send(&inbuf,1,MPI_INTEGER,rank+1,0,MPI_COMM_WORLD);
+        }
+        else{
+            MPI_Recv(&outbuf,1,MPI_INTEGER,rank-1,0,MPI_COMM_WORLD,&status);
+            inbuf = cur_proc_prefixSum + outbuf;
+            if(rank +1 < numprocs){
+            MPI_Send(&inbuf,1,MPI_INTEGER,rank+1,0,MPI_COMM_WORLD);
+            }
+        }
 
+    }
+    #else
     //MPI_Scan
     MPI_Scan(&inbuf,&outbuf,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD); 
-    
+    #endif
 
+    #if P2PCommunication
+    prefix_sum[st] = outbuf + arr[st];
+    for(i = st+1;i<dt;i++){
+        prefix_sum[i] = prefix_sum[i-1] + arr[i];
+    }
+
+
+    #else
     //use outbuf to get prefix_sum
     //outbuf : sum of 0~st-1
     if(rank != 0)
-        prefix_sum[st] = outbuf-inbuf+arr[st];
+        prefix_sum[st] = outbuf-cur_proc_prefixSum+arr[st];
     else{
         prefix_sum[st] = 0;
     }
@@ -88,6 +117,7 @@ int main(int argc,char * argv[]){
     for(i= st+1;i<dt;i++){
         prefix_sum[i] = prefix_sum[i-1] + arr[i];
     }
+    #endif
     #if DEBUG
     //for test
     for(i=st;i<dt;i++){
